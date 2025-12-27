@@ -27,7 +27,8 @@ export async function GET() {
   if (process.env.KV_URL && process.env.KV_REST_API_TOKEN) {
     try {
       const kv = require('@vercel/kv').kv
-      await kv.ping()
+      // Try a simple get operation to test connection
+      await kv.get('_health_check')
       if (!status.redis) {
         status.kv = true
         status.message = 'Using Vercel KV storage'
