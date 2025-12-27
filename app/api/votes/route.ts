@@ -1,15 +1,32 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { createClient } from 'redis'
 
 const VOTE_KEY = 'triangle_game_votes'
 
-// Initialize KV only if environment variables are set
-let kv: any = null
-try {
-  if (process.env.KV_URL && process.env.KV_REST_API_TOKEN) {
-    kv = require('@vercel/kv').kv
+// Initialize Redis client
+let redisClient: ReturnType<typeof createClient> | null = null
+
+// Try to initialize Redis if REDIS_URL is available (from marketplace Redis)
+if (process.env.REDIS_URL) {
+  try {
+    redisClient = createClient({
+      url: process.env.REDIS_URL,
+    })
+    redisClient.on('error', (err) => console.error('Redis Client Error', err))
+    // Note: We'll connect on first use to avoid connection issues
+  } catch (error) {
+    console.warn('Redis not available:', error)
   }
-} catch (error) {
-  console.warn('KV not available:', error)
+}
+
+// Fallback: Try Vercel KV if KV_URL is available
+let kv: any = null
+if (!redisClient && process.env.KV_URL && process.env.KV_REST_API_TOKEN) {
+  try {
+    kv = require('@vercel/kv').kv
+  } catch (error) {
+    console.warn('KV not available:', error)
+  }
 }
 
 // Fallback in-memory storage for development (not persistent across deployments)
@@ -27,16 +44,16 @@ interface VoteData {
 // GET - Retrieve all votes
 export async function GET() {
   try {
-    // Check if KV is configured
-    if (!kv || !process.env.KV_URL || !process.env.KV_REST_API_TOKEN) {
-      // Return fallback votes for development
-      console.warn('KV not configured. Using fallback storage (not persistent).')
-      return NextResponse.json(fallbackVotes)
-    }
-
-    const votes = (await kv.get(VOTE_KEY)) as VoteData | null
-    
-    if (!votes) {
+    // Try Redis first (from marketplace)
+    if (redisClient) {
+      if (!redisClient.isOpen) {
+        await redisClient.connect()
+      }
+      const votesJson = await redisClient.get(VOTE_KEY)
+      if (votesJson) {
+        const votes = JSON.parse(votesJson) as VoteData
+        return NextResponse.json(votes)
+      }
       return NextResponse.json({
         '24': 0,
         '47': 0,
@@ -45,10 +62,25 @@ export async function GET() {
       })
     }
 
-    return NextResponse.json(votes)
+    // Fallback to Vercel KV
+    if (kv && process.env.KV_URL && process.env.KV_REST_API_TOKEN) {
+      const votes = (await kv.get(VOTE_KEY)) as VoteData | null
+      if (!votes) {
+        return NextResponse.json({
+          '24': 0,
+          '47': 0,
+          '199': 0,
+          'many': 0,
+        })
+      }
+      return NextResponse.json(votes)
+    }
+
+    // No storage configured
+    console.warn('⚠️ No storage configured. Using fallback (NOT PERSISTENT - votes will reset).')
+    return NextResponse.json(fallbackVotes)
   } catch (error) {
     console.error('Error fetching votes:', error)
-    // Return fallback on error
     return NextResponse.json(fallbackVotes)
   }
 }
@@ -67,32 +99,41 @@ export async function POST(request: NextRequest) {
 
     let currentVotes: VoteData
 
-    // Check if KV is configured
-    if (!kv || !process.env.KV_URL || !process.env.KV_REST_API_TOKEN) {
-      // Use fallback storage for development
-      console.warn('KV not configured. Using fallback storage (not persistent across deployments).')
-      currentVotes = { ...fallbackVotes }
-    } else {
-      // Get current votes from KV
+    // Try Redis first (from marketplace)
+    if (redisClient) {
+      if (!redisClient.isOpen) {
+        await redisClient.connect()
+      }
+      const votesJson = await redisClient.get(VOTE_KEY)
+      currentVotes = votesJson ? (JSON.parse(votesJson) as VoteData) : {
+        '24': 0,
+        '47': 0,
+        '199': 0,
+        'many': 0,
+      }
+      currentVotes[answer] = (currentVotes[answer] || 0) + 1
+      await redisClient.set(VOTE_KEY, JSON.stringify(currentVotes))
+      return NextResponse.json({ success: true, votes: currentVotes })
+    }
+
+    // Fallback to Vercel KV
+    if (kv && process.env.KV_URL && process.env.KV_REST_API_TOKEN) {
       currentVotes = ((await kv.get(VOTE_KEY)) as VoteData | null) || {
         '24': 0,
         '47': 0,
         '199': 0,
         'many': 0,
       }
-    }
-
-    // Increment the selected answer
-    currentVotes[answer] = (currentVotes[answer] || 0) + 1
-
-    // Save back to storage
-    if (kv && process.env.KV_URL && process.env.KV_REST_API_TOKEN) {
-      // Save to KV for persistence
+      currentVotes[answer] = (currentVotes[answer] || 0) + 1
       await kv.set(VOTE_KEY, currentVotes)
-    } else {
-      // Update fallback storage
-      fallbackVotes = { ...currentVotes }
+      return NextResponse.json({ success: true, votes: currentVotes })
     }
+
+    // No storage configured - use fallback
+    console.warn('⚠️ No storage configured. Using fallback (NOT PERSISTENT - votes will reset).')
+    currentVotes = { ...fallbackVotes }
+    currentVotes[answer] = (currentVotes[answer] || 0) + 1
+    fallbackVotes = { ...currentVotes }
 
     return NextResponse.json({ success: true, votes: currentVotes })
   } catch (error) {
