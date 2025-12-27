@@ -1,0 +1,280 @@
+.gameContainer {
+  width: 100%;
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.gameCard {
+  background: white;
+  border-radius: 20px;
+  padding: 40px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+}
+
+.gameTitle {
+  font-size: 2.5rem;
+  color: #333;
+  text-align: center;
+  margin-bottom: 30px;
+  font-weight: 700;
+}
+
+.questionSection {
+  margin-bottom: 40px;
+}
+
+.questionText {
+  font-size: 1.5rem;
+  color: #555;
+  text-align: center;
+  margin-bottom: 30px;
+  font-weight: 600;
+}
+
+.triangleDisplay {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin: 40px 0;
+  padding: 20px;
+  background: #f8f9fa;
+  border-radius: 15px;
+  min-height: 400px;
+}
+
+.triangleSvg {
+  width: 100%;
+  max-width: 400px;
+  height: auto;
+}
+
+.answersGrid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 15px;
+  margin-top: 30px;
+}
+
+.answerButton {
+  padding: 20px 30px;
+  font-size: 1.3rem;
+  font-weight: 600;
+  border: 3px solid #667eea;
+  background: white;
+  color: #667eea;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+
+.answerButton:hover:not(.disabled) {
+  background: #667eea;
+  color: white;
+  transform: translateY(-2px);
+  box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+}
+
+.answerButton.selected {
+  background: #667eea;
+  color: white;
+  border-color: #667eea;
+}
+
+.answerButton.correct {
+  background: #10b981 !important;
+  border-color: #10b981 !important;
+  color: white !important;
+  animation: correctPulse 0.6s ease;
+  box-shadow: 0 0 20px rgba(16, 185, 129, 0.5);
+}
+
+.answerButton.incorrect {
+  background: #ef4444 !important;
+  border-color: #ef4444 !important;
+  color: white !important;
+  animation: shake 0.5s ease;
+}
+
+.answerButton.disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.answerLabel {
+  flex: 1;
+}
+
+.resultIcon {
+  font-size: 1.5rem;
+  font-weight: bold;
+  animation: popIn 0.3s ease;
+}
+
+@keyframes correctPulse {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.05);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes shake {
+  0%, 100% {
+    transform: translateX(0);
+  }
+  25% {
+    transform: translateX(-10px);
+  }
+  75% {
+    transform: translateX(10px);
+  }
+}
+
+@keyframes popIn {
+  0% {
+    transform: scale(0);
+    opacity: 0;
+  }
+  50% {
+    transform: scale(1.2);
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.feedbackMessage {
+  margin-top: 25px;
+  padding: 20px;
+  border-radius: 12px;
+  text-align: center;
+  font-size: 1.2rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  animation: slideDown 0.4s ease;
+}
+
+.feedbackCorrect {
+  background: #d1fae5;
+  color: #065f46;
+  border: 2px solid #10b981;
+}
+
+.feedbackIncorrect {
+  background: #fee2e2;
+  color: #991b1b;
+  border: 2px solid #ef4444;
+}
+
+.celebration {
+  font-size: 1.5rem;
+  animation: bounce 1s infinite;
+}
+
+@keyframes bounce {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+@keyframes slideDown {
+  0% {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.retryContainer {
+  display: flex;
+  justify-content: center;
+  margin-top: 25px;
+  animation: slideDown 0.4s ease;
+}
+
+.retryButton {
+  padding: 15px 40px;
+  font-size: 1.2rem;
+  font-weight: 600;
+  border: 3px solid #667eea;
+  background: white;
+  color: #667eea;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.retryButton:hover {
+  background: #667eea;
+  color: white;
+  transform: translateY(-2px);
+  box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+}
+
+.resultsSection {
+  margin-top: 40px;
+  padding-top: 40px;
+  border-top: 2px solid #e0e0e0;
+}
+
+.resultsTitle {
+  font-size: 2rem;
+  color: #333;
+  text-align: center;
+  margin-bottom: 20px;
+  font-weight: 700;
+}
+
+.graphContainer {
+  margin-top: 30px;
+}
+
+.totalVotes {
+  text-align: center;
+  font-size: 1.2rem;
+  color: #666;
+  margin-bottom: 20px;
+  font-weight: 600;
+}
+
+@media (max-width: 600px) {
+  .gameCard {
+    padding: 20px;
+  }
+
+  .gameTitle {
+    font-size: 1.8rem;
+  }
+
+  .questionText {
+    font-size: 1.2rem;
+  }
+
+  .answersGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .triangleDisplay {
+    min-height: 300px;
+  }
+}
+
