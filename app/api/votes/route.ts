@@ -5,17 +5,49 @@ const VOTE_KEY = 'triangle_game_votes'
 
 // Initialize Redis client
 let redisClient: ReturnType<typeof createClient> | null = null
+let redisConnecting = false
 
-// Try to initialize Redis if REDIS_URL is available (from marketplace Redis)
-if (process.env.REDIS_URL) {
+// Helper function to get or create Redis client
+async function getRedisClient() {
+  if (!process.env.REDIS_URL) {
+    return null
+  }
+
+  if (redisClient && redisClient.isOpen) {
+    return redisClient
+  }
+
+  if (redisConnecting) {
+    // Wait a bit if connection is in progress
+    await new Promise(resolve => setTimeout(resolve, 100))
+    if (redisClient && redisClient.isOpen) {
+      return redisClient
+    }
+  }
+
   try {
-    redisClient = createClient({
-      url: process.env.REDIS_URL,
-    })
-    redisClient.on('error', (err) => console.error('Redis Client Error', err))
-    // Note: We'll connect on first use to avoid connection issues
+    redisConnecting = true
+    if (!redisClient) {
+      redisClient = createClient({
+        url: process.env.REDIS_URL,
+      })
+      redisClient.on('error', (err) => {
+        console.error('Redis Client Error', err)
+        // Reset client on error so it can be recreated
+        redisClient = null
+      })
+    }
+    
+    if (!redisClient.isOpen) {
+      await redisClient.connect()
+    }
+    redisConnecting = false
+    return redisClient
   } catch (error) {
-    console.warn('Redis not available:', error)
+    console.error('Failed to connect to Redis:', error)
+    redisConnecting = false
+    redisClient = null
+    return null
   }
 }
 
@@ -45,16 +77,10 @@ interface VoteData {
 export async function GET() {
   try {
     // Try Redis first (from marketplace)
-    if (process.env.REDIS_URL) {
+    const client = await getRedisClient()
+    if (client) {
       try {
-        if (!redisClient) {
-          redisClient = createClient({ url: process.env.REDIS_URL })
-          redisClient.on('error', (err) => console.error('Redis Client Error', err))
-        }
-        if (!redisClient.isOpen) {
-          await redisClient.connect()
-        }
-        const votesJson = await redisClient.get(VOTE_KEY)
+        const votesJson = await client.get(VOTE_KEY)
         if (votesJson) {
           const votes = JSON.parse(votesJson) as VoteData
           console.log('✅ Using Redis storage')
@@ -68,9 +94,11 @@ export async function GET() {
           'many': 0,
         })
       } catch (error) {
-        console.error('❌ Redis connection failed:', error)
+        console.error('❌ Redis get failed:', error)
         // Fall through to other options
       }
+    } else if (process.env.REDIS_URL) {
+      console.warn('⚠️ REDIS_URL is set but connection failed')
     } else {
       console.warn('⚠️ REDIS_URL not found in environment variables')
     }
@@ -115,16 +143,10 @@ export async function POST(request: NextRequest) {
     let currentVotes: VoteData
 
     // Try Redis first (from marketplace)
-    if (process.env.REDIS_URL) {
+    const client = await getRedisClient()
+    if (client) {
       try {
-        if (!redisClient) {
-          redisClient = createClient({ url: process.env.REDIS_URL })
-          redisClient.on('error', (err) => console.error('Redis Client Error', err))
-        }
-        if (!redisClient.isOpen) {
-          await redisClient.connect()
-        }
-        const votesJson = await redisClient.get(VOTE_KEY)
+        const votesJson = await client.get(VOTE_KEY)
         currentVotes = votesJson ? (JSON.parse(votesJson) as VoteData) : {
           '24': 0,
           '47': 0,
@@ -132,11 +154,11 @@ export async function POST(request: NextRequest) {
           'many': 0,
         }
         currentVotes[answer] = (currentVotes[answer] || 0) + 1
-        await redisClient.set(VOTE_KEY, JSON.stringify(currentVotes))
+        await client.set(VOTE_KEY, JSON.stringify(currentVotes))
         console.log('✅ Using Redis storage - vote saved')
         return NextResponse.json({ success: true, votes: currentVotes })
       } catch (error) {
-        console.error('❌ Redis connection failed:', error)
+        console.error('❌ Redis save failed:', error)
         // Fall through to other options
       }
     }
