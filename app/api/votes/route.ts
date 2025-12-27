@@ -45,21 +45,34 @@ interface VoteData {
 export async function GET() {
   try {
     // Try Redis first (from marketplace)
-    if (redisClient) {
-      if (!redisClient.isOpen) {
-        await redisClient.connect()
+    if (process.env.REDIS_URL) {
+      try {
+        if (!redisClient) {
+          redisClient = createClient({ url: process.env.REDIS_URL })
+          redisClient.on('error', (err) => console.error('Redis Client Error', err))
+        }
+        if (!redisClient.isOpen) {
+          await redisClient.connect()
+        }
+        const votesJson = await redisClient.get(VOTE_KEY)
+        if (votesJson) {
+          const votes = JSON.parse(votesJson) as VoteData
+          console.log('✅ Using Redis storage')
+          return NextResponse.json(votes)
+        }
+        console.log('✅ Using Redis storage (empty, returning defaults)')
+        return NextResponse.json({
+          '24': 0,
+          '47': 0,
+          '199': 0,
+          'many': 0,
+        })
+      } catch (error) {
+        console.error('❌ Redis connection failed:', error)
+        // Fall through to other options
       }
-      const votesJson = await redisClient.get(VOTE_KEY)
-      if (votesJson) {
-        const votes = JSON.parse(votesJson) as VoteData
-        return NextResponse.json(votes)
-      }
-      return NextResponse.json({
-        '24': 0,
-        '47': 0,
-        '199': 0,
-        'many': 0,
-      })
+    } else {
+      console.warn('⚠️ REDIS_URL not found in environment variables')
     }
 
     // Fallback to Vercel KV
@@ -78,6 +91,8 @@ export async function GET() {
 
     // No storage configured
     console.warn('⚠️ No storage configured. Using fallback (NOT PERSISTENT - votes will reset).')
+    console.warn('⚠️ REDIS_URL:', process.env.REDIS_URL ? 'SET' : 'NOT SET')
+    console.warn('⚠️ KV_URL:', process.env.KV_URL ? 'SET' : 'NOT SET')
     return NextResponse.json(fallbackVotes)
   } catch (error) {
     console.error('Error fetching votes:', error)
@@ -100,20 +115,30 @@ export async function POST(request: NextRequest) {
     let currentVotes: VoteData
 
     // Try Redis first (from marketplace)
-    if (redisClient) {
-      if (!redisClient.isOpen) {
-        await redisClient.connect()
+    if (process.env.REDIS_URL) {
+      try {
+        if (!redisClient) {
+          redisClient = createClient({ url: process.env.REDIS_URL })
+          redisClient.on('error', (err) => console.error('Redis Client Error', err))
+        }
+        if (!redisClient.isOpen) {
+          await redisClient.connect()
+        }
+        const votesJson = await redisClient.get(VOTE_KEY)
+        currentVotes = votesJson ? (JSON.parse(votesJson) as VoteData) : {
+          '24': 0,
+          '47': 0,
+          '199': 0,
+          'many': 0,
+        }
+        currentVotes[answer] = (currentVotes[answer] || 0) + 1
+        await redisClient.set(VOTE_KEY, JSON.stringify(currentVotes))
+        console.log('✅ Using Redis storage - vote saved')
+        return NextResponse.json({ success: true, votes: currentVotes })
+      } catch (error) {
+        console.error('❌ Redis connection failed:', error)
+        // Fall through to other options
       }
-      const votesJson = await redisClient.get(VOTE_KEY)
-      currentVotes = votesJson ? (JSON.parse(votesJson) as VoteData) : {
-        '24': 0,
-        '47': 0,
-        '199': 0,
-        'many': 0,
-      }
-      currentVotes[answer] = (currentVotes[answer] || 0) + 1
-      await redisClient.set(VOTE_KEY, JSON.stringify(currentVotes))
-      return NextResponse.json({ success: true, votes: currentVotes })
     }
 
     // Fallback to Vercel KV
