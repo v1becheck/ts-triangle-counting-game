@@ -13,7 +13,6 @@ export default function TriangleGame() {
   const [selectedAnswer, setSelectedAnswer] = useState<string | null>(null)
   const [hasVoted, setHasVoted] = useState(false)
   const [voteData, setVoteData] = useState<VoteData>({})
-  const [loading, setLoading] = useState(false)
   const [roastMessage, setRoastMessage] = useState<string>('')
 
   // With this overly complex pattern, "Many" is the most reasonable answer!
@@ -85,7 +84,6 @@ export default function TriangleGame() {
   const handleAnswerSelect = async (answerId: string) => {
     if (hasVoted) return
 
-    setLoading(true)
     setSelectedAnswer(answerId)
 
     // If incorrect, pick a random roast message
@@ -94,31 +92,41 @@ export default function TriangleGame() {
       setRoastMessage(randomRoast)
     }
 
-    try {
-      const response = await fetch('/api/votes', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ answer: answerId }),
-      })
+    // Optimistic update: immediately update UI
+    setHasVoted(true)
+    setVoteData(prev => ({
+      ...prev,
+      [answerId]: (prev[answerId] || 0) + 1
+    }))
 
-      if (response.ok) {
-        setHasVoted(true)
-        // Refresh vote data to show updated results
-        await fetchVoteData()
-      }
-    } catch (error) {
-      console.error('Error submitting vote:', error)
-    } finally {
-      setLoading(false)
-    }
+    // Send vote to server in the background (don't wait for it)
+    fetch('/api/votes', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ answer: answerId }),
+    })
+      .then(async (response) => {
+        if (response.ok) {
+          // Optionally refresh vote data to ensure consistency with server
+          // But don't block the UI - do it silently in the background
+          const data = await response.json()
+          if (data.votes) {
+            setVoteData(data.votes)
+          }
+        }
+      })
+      .catch((error) => {
+        console.error('Error submitting vote:', error)
+        // On error, we could revert the optimistic update, but for simplicity
+        // we'll just log it. The next page refresh will show the correct data.
+      })
   }
 
   const handleRetry = () => {
     setSelectedAnswer(null)
     setHasVoted(false)
-    setLoading(false)
     setRoastMessage('')
   }
 
@@ -144,7 +152,7 @@ export default function TriangleGame() {
                 <button
                   key={answer.id}
                   onClick={() => handleAnswerSelect(answer.id)}
-                  disabled={hasVoted || loading}
+                  disabled={hasVoted}
                   className={`${styles.answerButton} ${
                     selected ? styles.selected : ''
                   } ${hasVoted ? styles.disabled : ''} ${
