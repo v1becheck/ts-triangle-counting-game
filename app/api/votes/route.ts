@@ -3,16 +3,16 @@ import { Redis } from '@upstash/redis'
 
 const VOTE_KEY = 'triangle_game_votes'
 
-// Initialize Upstash Redis
-// Upstash provides KV_REST_API_URL and KV_REST_API_TOKEN
-// Skip fromEnv() since it looks for UPSTASH_REDIS_REST_URL which Upstash doesn't provide
-let redis: Redis | null = null
-
-if (process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN) {
-  redis = new Redis({
-    url: process.env.KV_REST_API_URL,
-    token: process.env.KV_REST_API_TOKEN,
-  })
+// Helper function to get Redis client
+// Initialize on each request to ensure env vars are available in serverless
+function getRedis(): Redis | null {
+  if (process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN) {
+    return new Redis({
+      url: process.env.KV_REST_API_URL,
+      token: process.env.KV_REST_API_TOKEN,
+    })
+  }
+  return null
 }
 
 // Fallback in-memory storage for development (not persistent across deployments)
@@ -44,7 +44,9 @@ export async function GET(request: NextRequest) {
     })
   }
 
-  // Check if Redis is configured
+  // Get Redis client (check env vars on each request)
+  const redis = getRedis()
+  
   if (!redis) {
     console.warn('⚠️ Redis not configured. Using fallback (NOT PERSISTENT).')
     console.warn('⚠️ Looking for KV_REST_API_URL:', !!process.env.KV_REST_API_URL)
@@ -85,7 +87,9 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Check if Redis is configured
+    // Get Redis client (check env vars on each request)
+    const redis = getRedis()
+    
     if (!redis) {
       console.warn('⚠️ Redis not configured. Using fallback (NOT PERSISTENT).')
       const currentVotes = { ...fallbackVotes }

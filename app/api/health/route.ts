@@ -14,9 +14,7 @@ export async function GET() {
     },
   }
 
-  // Initialize Redis
-  // Upstash provides KV_REST_API_URL and KV_REST_API_TOKEN
-  // Skip fromEnv() since it looks for UPSTASH_REDIS_REST_URL which Upstash doesn't provide
+  // Initialize Redis (check env vars on each request for serverless)
   let redis: Redis | null = null
 
   if (process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN) {
