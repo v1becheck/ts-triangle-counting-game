@@ -16,7 +16,22 @@ interface VoteData {
 }
 
 // GET - Retrieve all votes
-export async function GET() {
+export async function GET(request: NextRequest) {
+  // Debug endpoint - add ?debug=true to see environment variable status
+  const url = new URL(request.url)
+  if (url.searchParams.get('debug') === 'true') {
+    return NextResponse.json({
+      envVars: {
+        hasKV_REST_API_URL: !!process.env.KV_REST_API_URL,
+        hasKV_REST_API_TOKEN: !!process.env.KV_REST_API_TOKEN,
+        hasKV_URL: !!process.env.KV_URL,
+        hasREDIS_URL: !!process.env.REDIS_URL,
+      },
+      kv_REST_API_URL_length: process.env.KV_REST_API_URL?.length || 0,
+      kv_REST_API_TOKEN_length: process.env.KV_REST_API_TOKEN?.length || 0,
+    })
+  }
+
   try {
     // Try to use KV - it will throw if env vars are missing
     const votes = (await kv.get(VOTE_KEY)) as VoteData | null
@@ -35,6 +50,7 @@ export async function GET() {
     // If KV is not configured, @vercel/kv will throw an error
     if (error?.message?.includes('KV_REST_API_URL') || error?.message?.includes('environment variables')) {
       console.warn('⚠️ Vercel KV not configured. Using fallback (NOT PERSISTENT).')
+      console.warn('⚠️ Error details:', error?.message)
       return NextResponse.json(fallbackVotes)
     }
     console.error('Error fetching votes:', error)
