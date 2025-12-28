@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { Redis } from '@upstash/redis'
+import { redis } from '@/lib/redis'
 
 export async function GET() {
   const status = {
@@ -14,31 +14,8 @@ export async function GET() {
     },
   }
 
-  // Initialize Redis (check env vars on each request for serverless)
-  // Try Redis.fromEnv() first, then fall back to KV vars
-  let redis: Redis | null = null
-  
-  try {
-    redis = Redis.fromEnv()
-  } catch (error) {
-    if (process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN) {
-      redis = new Redis({
-        url: process.env.KV_REST_API_URL,
-        token: process.env.KV_REST_API_TOKEN,
-      })
-    }
-  }
-
-  if (redis) {
-    try {
-      // Try a simple ping operation to test connection
-      await redis.ping()
-      status.redis = true
-      status.message = '✅ Using Upstash Redis storage'
-    } catch (error: any) {
-      status.message = `❌ Redis connection failed: ${error?.message || error}`
-    }
-  } else {
+  // Check if Redis is configured
+  if (!process.env.KV_REST_API_URL && !process.env.UPSTASH_REDIS_REST_URL) {
     status.fallback = true
     const missing = []
     if (!process.env.UPSTASH_REDIS_REST_URL && !process.env.KV_REST_API_URL) {
@@ -48,6 +25,16 @@ export async function GET() {
       missing.push('UPSTASH_REDIS_REST_TOKEN or KV_REST_API_TOKEN')
     }
     status.message = `⚠️ Missing environment variables: ${missing.join(', ')}. Using in-memory fallback (NOT PERSISTENT)`
+    return NextResponse.json(status)
+  }
+
+  try {
+    // Try a simple ping operation to test connection
+    await redis.ping()
+    status.redis = true
+    status.message = '✅ Using Upstash Redis storage'
+  } catch (error: any) {
+    status.message = `❌ Redis connection failed: ${error?.message || error}`
   }
 
   return NextResponse.json(status)

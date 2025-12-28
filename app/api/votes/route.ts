@@ -1,27 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { Redis } from '@upstash/redis'
+import { redis } from '@/lib/redis'
 
 const VOTE_KEY = 'triangle_game_votes'
-
-// Helper function to get Redis client
-// Initialize on each request to ensure env vars are available in serverless
-// Try Redis.fromEnv() first (looks for UPSTASH_REDIS_REST_URL/TOKEN)
-// Then fall back to KV_REST_API_URL/TOKEN (what Upstash provides)
-function getRedis(): Redis | null {
-  try {
-    // Try fromEnv() which looks for UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN
-    return Redis.fromEnv()
-  } catch (error) {
-    // If fromEnv() fails, use KV_REST_API_URL/TOKEN (what Upstash actually provides)
-    if (process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN) {
-      return new Redis({
-        url: process.env.KV_REST_API_URL,
-        token: process.env.KV_REST_API_TOKEN,
-      })
-    }
-  }
-  return null
-}
 
 // Fallback in-memory storage for development (not persistent across deployments)
 let fallbackVotes: { [key: string]: number } = {
@@ -52,13 +32,9 @@ export async function GET(request: NextRequest) {
     })
   }
 
-  // Get Redis client (check env vars on each request)
-  const redis = getRedis()
-  
-  if (!redis) {
+  // Check if Redis is configured
+  if (!process.env.KV_REST_API_URL && !process.env.UPSTASH_REDIS_REST_URL) {
     console.warn('⚠️ Redis not configured. Using fallback (NOT PERSISTENT).')
-    console.warn('⚠️ Looking for KV_REST_API_URL:', !!process.env.KV_REST_API_URL)
-    console.warn('⚠️ Looking for KV_REST_API_TOKEN:', !!process.env.KV_REST_API_TOKEN)
     return NextResponse.json(fallbackVotes)
   }
 
@@ -95,10 +71,8 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Get Redis client (check env vars on each request)
-    const redis = getRedis()
-    
-    if (!redis) {
+    // Check if Redis is configured
+    if (!process.env.KV_REST_API_URL && !process.env.UPSTASH_REDIS_REST_URL) {
       console.warn('⚠️ Redis not configured. Using fallback (NOT PERSISTENT).')
       const currentVotes = { ...fallbackVotes }
       currentVotes[answer] = (currentVotes[answer] || 0) + 1
