@@ -2,7 +2,7 @@
 
 A joke puzzle game where users try to count triangles in a complex pattern. The answer is "Many" - it's designed to make people overthink it!
 
-Demo: https://ts-triangle-counting-game-h47getfne-ecoexplorers-projects.vercel.app/
+Demo: https://ts-triangle-counting-game.vercel.app/
 
 ## Features
 
