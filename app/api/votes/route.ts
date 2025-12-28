@@ -18,13 +18,7 @@ interface VoteData {
 // GET - Retrieve all votes
 export async function GET() {
   try {
-    // Check if KV is configured
-    // @vercel/kv expects KV_REST_API_URL and KV_REST_API_TOKEN
-    if (!process.env.KV_REST_API_URL || !process.env.KV_REST_API_TOKEN) {
-      console.warn('⚠️ Vercel KV not configured. Using fallback (NOT PERSISTENT).')
-      return NextResponse.json(fallbackVotes)
-    }
-
+    // Try to use KV - it will throw if env vars are missing
     const votes = (await kv.get(VOTE_KEY)) as VoteData | null
     
     if (!votes) {
@@ -37,7 +31,12 @@ export async function GET() {
     }
 
     return NextResponse.json(votes)
-  } catch (error) {
+  } catch (error: any) {
+    // If KV is not configured, @vercel/kv will throw an error
+    if (error?.message?.includes('KV_REST_API_URL') || error?.message?.includes('environment variables')) {
+      console.warn('⚠️ Vercel KV not configured. Using fallback (NOT PERSISTENT).')
+      return NextResponse.json(fallbackVotes)
+    }
     console.error('Error fetching votes:', error)
     return NextResponse.json(fallbackVotes)
   }
@@ -55,31 +54,34 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Check if KV is configured
-    // @vercel/kv expects KV_REST_API_URL and KV_REST_API_TOKEN
-    if (!process.env.KV_REST_API_URL || !process.env.KV_REST_API_TOKEN) {
-      console.warn('⚠️ Vercel KV not configured. Using fallback (NOT PERSISTENT).')
-      const currentVotes = { ...fallbackVotes }
+    // Try to use KV - it will throw if env vars are missing
+    try {
+      // Get current votes from KV
+      const currentVotes = ((await kv.get(VOTE_KEY)) as VoteData | null) || {
+        '24': 0,
+        '47': 0,
+        '199': 0,
+        'many': 0,
+      }
+
+      // Increment the selected answer
       currentVotes[answer] = (currentVotes[answer] || 0) + 1
-      fallbackVotes = { ...currentVotes }
+
+      // Save back to KV
+      await kv.set(VOTE_KEY, currentVotes)
+
       return NextResponse.json({ success: true, votes: currentVotes })
+    } catch (error: any) {
+      // If KV is not configured, @vercel/kv will throw an error
+      if (error?.message?.includes('KV_REST_API_URL') || error?.message?.includes('environment variables')) {
+        console.warn('⚠️ Vercel KV not configured. Using fallback (NOT PERSISTENT).')
+        const currentVotes = { ...fallbackVotes }
+        currentVotes[answer] = (currentVotes[answer] || 0) + 1
+        fallbackVotes = { ...currentVotes }
+        return NextResponse.json({ success: true, votes: currentVotes })
+      }
+      throw error // Re-throw if it's a different error
     }
-
-    // Get current votes from KV
-    const currentVotes = ((await kv.get(VOTE_KEY)) as VoteData | null) || {
-      '24': 0,
-      '47': 0,
-      '199': 0,
-      'many': 0,
-    }
-
-    // Increment the selected answer
-    currentVotes[answer] = (currentVotes[answer] || 0) + 1
-
-    // Save back to KV
-    await kv.set(VOTE_KEY, currentVotes)
-
-    return NextResponse.json({ success: true, votes: currentVotes })
   } catch (error) {
     console.error('Error submitting vote:', error)
     return NextResponse.json(
