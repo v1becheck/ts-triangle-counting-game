@@ -5,12 +5,20 @@ const VOTE_KEY = 'triangle_game_votes'
 
 // Helper function to get Redis client
 // Initialize on each request to ensure env vars are available in serverless
+// Try Redis.fromEnv() first (looks for UPSTASH_REDIS_REST_URL/TOKEN)
+// Then fall back to KV_REST_API_URL/TOKEN (what Upstash provides)
 function getRedis(): Redis | null {
-  if (process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN) {
-    return new Redis({
-      url: process.env.KV_REST_API_URL,
-      token: process.env.KV_REST_API_TOKEN,
-    })
+  try {
+    // Try fromEnv() which looks for UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN
+    return Redis.fromEnv()
+  } catch (error) {
+    // If fromEnv() fails, use KV_REST_API_URL/TOKEN (what Upstash actually provides)
+    if (process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN) {
+      return new Redis({
+        url: process.env.KV_REST_API_URL,
+        token: process.env.KV_REST_API_TOKEN,
+      })
+    }
   }
   return null
 }

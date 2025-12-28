@@ -15,13 +15,18 @@ export async function GET() {
   }
 
   // Initialize Redis (check env vars on each request for serverless)
+  // Try Redis.fromEnv() first, then fall back to KV vars
   let redis: Redis | null = null
-
-  if (process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN) {
-    redis = new Redis({
-      url: process.env.KV_REST_API_URL,
-      token: process.env.KV_REST_API_TOKEN,
-    })
+  
+  try {
+    redis = Redis.fromEnv()
+  } catch (error) {
+    if (process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN) {
+      redis = new Redis({
+        url: process.env.KV_REST_API_URL,
+        token: process.env.KV_REST_API_TOKEN,
+      })
+    }
   }
 
   if (redis) {
