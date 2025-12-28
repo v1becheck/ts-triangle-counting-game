@@ -15,7 +15,7 @@ export async function GET() {
   }
 
   // Check if Redis is configured
-  if (!process.env.KV_REST_API_URL && !process.env.UPSTASH_REDIS_REST_URL) {
+  if (!redis) {
     status.fallback = true
     const missing = []
     if (!process.env.UPSTASH_REDIS_REST_URL && !process.env.KV_REST_API_URL) {

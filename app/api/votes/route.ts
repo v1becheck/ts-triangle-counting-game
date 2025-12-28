@@ -33,8 +33,12 @@ export async function GET(request: NextRequest) {
   }
 
   // Check if Redis is configured
-  if (!process.env.KV_REST_API_URL && !process.env.UPSTASH_REDIS_REST_URL) {
+  if (!redis) {
     console.warn('⚠️ Redis not configured. Using fallback (NOT PERSISTENT).')
+    console.warn('⚠️ KV_REST_API_URL:', !!process.env.KV_REST_API_URL)
+    console.warn('⚠️ KV_REST_API_TOKEN:', !!process.env.KV_REST_API_TOKEN)
+    console.warn('⚠️ UPSTASH_REDIS_REST_URL:', !!process.env.UPSTASH_REDIS_REST_URL)
+    console.warn('⚠️ UPSTASH_REDIS_REST_TOKEN:', !!process.env.UPSTASH_REDIS_REST_TOKEN)
     return NextResponse.json(fallbackVotes)
   }
 
@@ -72,7 +76,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if Redis is configured
-    if (!process.env.KV_REST_API_URL && !process.env.UPSTASH_REDIS_REST_URL) {
+    if (!redis) {
       console.warn('⚠️ Redis not configured. Using fallback (NOT PERSISTENT).')
       const currentVotes = { ...fallbackVotes }
       currentVotes[answer] = (currentVotes[answer] || 0) + 1
