@@ -9,7 +9,8 @@ export async function GET() {
   }
 
   // Check Vercel KV
-  if (process.env.KV_URL && process.env.KV_REST_API_TOKEN) {
+  // @vercel/kv expects KV_REST_API_URL and KV_REST_API_TOKEN
+  if (process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN) {
     try {
       // Try a simple get operation to test connection
       await kv.get('_health_check')

@@ -19,7 +19,8 @@ interface VoteData {
 export async function GET() {
   try {
     // Check if KV is configured
-    if (!process.env.KV_URL || !process.env.KV_REST_API_TOKEN) {
+    // @vercel/kv expects KV_REST_API_URL and KV_REST_API_TOKEN
+    if (!process.env.KV_REST_API_URL || !process.env.KV_REST_API_TOKEN) {
       console.warn('⚠️ Vercel KV not configured. Using fallback (NOT PERSISTENT).')
       return NextResponse.json(fallbackVotes)
     }
@@ -55,7 +56,8 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if KV is configured
-    if (!process.env.KV_URL || !process.env.KV_REST_API_TOKEN) {
+    // @vercel/kv expects KV_REST_API_URL and KV_REST_API_TOKEN
+    if (!process.env.KV_REST_API_URL || !process.env.KV_REST_API_TOKEN) {
       console.warn('⚠️ Vercel KV not configured. Using fallback (NOT PERSISTENT).')
       const currentVotes = { ...fallbackVotes }
       currentVotes[answer] = (currentVotes[answer] || 0) + 1
