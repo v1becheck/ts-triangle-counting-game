@@ -1,7 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { kv } from '@vercel/kv'
+import { Redis } from '@upstash/redis'
 
 const VOTE_KEY = 'triangle_game_votes'
+
+// Initialize Upstash Redis
+// Upstash provides KV_REST_API_URL and KV_REST_API_TOKEN
+// Skip fromEnv() since it looks for UPSTASH_REDIS_REST_URL which Upstash doesn't provide
+let redis: Redis | null = null
+
+if (process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN) {
+  redis = new Redis({
+    url: process.env.KV_REST_API_URL,
+    token: process.env.KV_REST_API_TOKEN,
+  })
+}
 
 // Fallback in-memory storage for development (not persistent across deployments)
 let fallbackVotes: { [key: string]: number } = {
@@ -22,19 +34,27 @@ export async function GET(request: NextRequest) {
   if (url.searchParams.get('debug') === 'true') {
     return NextResponse.json({
       envVars: {
+        hasUPSTASH_REDIS_REST_URL: !!process.env.UPSTASH_REDIS_REST_URL,
+        hasUPSTASH_REDIS_REST_TOKEN: !!process.env.UPSTASH_REDIS_REST_TOKEN,
         hasKV_REST_API_URL: !!process.env.KV_REST_API_URL,
         hasKV_REST_API_TOKEN: !!process.env.KV_REST_API_TOKEN,
-        hasKV_URL: !!process.env.KV_URL,
-        hasREDIS_URL: !!process.env.REDIS_URL,
       },
-      kv_REST_API_URL_length: process.env.KV_REST_API_URL?.length || 0,
-      kv_REST_API_TOKEN_length: process.env.KV_REST_API_TOKEN?.length || 0,
+      upstash_url_length: process.env.UPSTASH_REDIS_REST_URL?.length || process.env.KV_REST_API_URL?.length || 0,
+      upstash_token_length: process.env.UPSTASH_REDIS_REST_TOKEN?.length || process.env.KV_REST_API_TOKEN?.length || 0,
     })
   }
 
+  // Check if Redis is configured
+  if (!redis) {
+    console.warn('⚠️ Redis not configured. Using fallback (NOT PERSISTENT).')
+    console.warn('⚠️ Looking for KV_REST_API_URL:', !!process.env.KV_REST_API_URL)
+    console.warn('⚠️ Looking for KV_REST_API_TOKEN:', !!process.env.KV_REST_API_TOKEN)
+    return NextResponse.json(fallbackVotes)
+  }
+
   try {
-    // Try to use KV - it will throw if env vars are missing
-    const votes = (await kv.get(VOTE_KEY)) as VoteData | null
+    const votesJson = await redis.get(VOTE_KEY)
+    const votes = votesJson ? (votesJson as VoteData) : null
     
     if (!votes) {
       return NextResponse.json({
@@ -45,14 +65,9 @@ export async function GET(request: NextRequest) {
       })
     }
 
+    console.log('✅ Using Redis storage')
     return NextResponse.json(votes)
   } catch (error: any) {
-    // If KV is not configured, @vercel/kv will throw an error
-    if (error?.message?.includes('KV_REST_API_URL') || error?.message?.includes('environment variables')) {
-      console.warn('⚠️ Vercel KV not configured. Using fallback (NOT PERSISTENT).')
-      console.warn('⚠️ Error details:', error?.message)
-      return NextResponse.json(fallbackVotes)
-    }
     console.error('Error fetching votes:', error)
     return NextResponse.json(fallbackVotes)
   }
@@ -70,10 +85,19 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Try to use KV - it will throw if env vars are missing
+    // Check if Redis is configured
+    if (!redis) {
+      console.warn('⚠️ Redis not configured. Using fallback (NOT PERSISTENT).')
+      const currentVotes = { ...fallbackVotes }
+      currentVotes[answer] = (currentVotes[answer] || 0) + 1
+      fallbackVotes = { ...currentVotes }
+      return NextResponse.json({ success: true, votes: currentVotes })
+    }
+
     try {
-      // Get current votes from KV
-      const currentVotes = ((await kv.get(VOTE_KEY)) as VoteData | null) || {
+      // Get current votes from Redis
+      const votesJson = await redis.get(VOTE_KEY)
+      const currentVotes = votesJson ? (votesJson as VoteData) : {
         '24': 0,
         '47': 0,
         '199': 0,
@@ -83,20 +107,18 @@ export async function POST(request: NextRequest) {
       // Increment the selected answer
       currentVotes[answer] = (currentVotes[answer] || 0) + 1
 
-      // Save back to KV
-      await kv.set(VOTE_KEY, currentVotes)
+      // Save back to Redis
+      await redis.set(VOTE_KEY, currentVotes)
 
+      console.log('✅ Using Redis storage - vote saved')
       return NextResponse.json({ success: true, votes: currentVotes })
     } catch (error: any) {
-      // If KV is not configured, @vercel/kv will throw an error
-      if (error?.message?.includes('KV_REST_API_URL') || error?.message?.includes('environment variables')) {
-        console.warn('⚠️ Vercel KV not configured. Using fallback (NOT PERSISTENT).')
-        const currentVotes = { ...fallbackVotes }
-        currentVotes[answer] = (currentVotes[answer] || 0) + 1
-        fallbackVotes = { ...currentVotes }
-        return NextResponse.json({ success: true, votes: currentVotes })
-      }
-      throw error // Re-throw if it's a different error
+      console.error('Error saving vote to Redis:', error)
+      // Fallback to in-memory
+      const currentVotes = { ...fallbackVotes }
+      currentVotes[answer] = (currentVotes[answer] || 0) + 1
+      fallbackVotes = { ...currentVotes }
+      return NextResponse.json({ success: true, votes: currentVotes })
     }
   } catch (error) {
     console.error('Error submitting vote:', error)

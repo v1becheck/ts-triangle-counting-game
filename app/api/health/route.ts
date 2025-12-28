@@ -1,35 +1,49 @@
 import { NextResponse } from 'next/server'
-import { kv } from '@vercel/kv'
+import { Redis } from '@upstash/redis'
 
 export async function GET() {
   const status = {
-    kv: false,
+    redis: false,
     fallback: false,
     message: '',
     envVars: {
+      hasUPSTASH_REDIS_REST_URL: !!process.env.UPSTASH_REDIS_REST_URL,
+      hasUPSTASH_REDIS_REST_TOKEN: !!process.env.UPSTASH_REDIS_REST_TOKEN,
       hasKV_REST_API_URL: !!process.env.KV_REST_API_URL,
       hasKV_REST_API_TOKEN: !!process.env.KV_REST_API_TOKEN,
-      hasKV_URL: !!process.env.KV_URL,
-      hasREDIS_URL: !!process.env.REDIS_URL,
     },
   }
 
-  // Check Vercel KV
-  // @vercel/kv expects KV_REST_API_URL and KV_REST_API_TOKEN
+  // Initialize Redis
+  // Upstash provides KV_REST_API_URL and KV_REST_API_TOKEN
+  // Skip fromEnv() since it looks for UPSTASH_REDIS_REST_URL which Upstash doesn't provide
+  let redis: Redis | null = null
+
   if (process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN) {
+    redis = new Redis({
+      url: process.env.KV_REST_API_URL,
+      token: process.env.KV_REST_API_TOKEN,
+    })
+  }
+
+  if (redis) {
     try {
-      // Try a simple get operation to test connection
-      await kv.get('_health_check')
-      status.kv = true
-      status.message = '✅ Using Vercel KV storage'
+      // Try a simple ping operation to test connection
+      await redis.ping()
+      status.redis = true
+      status.message = '✅ Using Upstash Redis storage'
     } catch (error: any) {
-      status.message = `❌ KV connection failed: ${error?.message || error}`
+      status.message = `❌ Redis connection failed: ${error?.message || error}`
     }
   } else {
     status.fallback = true
     const missing = []
-    if (!process.env.KV_REST_API_URL) missing.push('KV_REST_API_URL')
-    if (!process.env.KV_REST_API_TOKEN) missing.push('KV_REST_API_TOKEN')
+    if (!process.env.UPSTASH_REDIS_REST_URL && !process.env.KV_REST_API_URL) {
+      missing.push('UPSTASH_REDIS_REST_URL or KV_REST_API_URL')
+    }
+    if (!process.env.UPSTASH_REDIS_REST_TOKEN && !process.env.KV_REST_API_TOKEN) {
+      missing.push('UPSTASH_REDIS_REST_TOKEN or KV_REST_API_TOKEN')
+    }
     status.message = `⚠️ Missing environment variables: ${missing.join(', ')}. Using in-memory fallback (NOT PERSISTENT)`
   }
 
